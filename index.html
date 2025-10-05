@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zebra QLn (2-inch) Web Label Printer</title>
+  <style>
+    :root { --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8; --ok:#10b981; --warn:#f59e0b; --err:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin:0; padding:24px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
+    h1 { font-size: 20px; margin: 0 0 12px 0; }
+    .app { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 16px; }
+    .card { background: var(--panel); border: 1px solid #1f2937; border-radius: 14px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea { width: 100%; background: #0b1220; color: var(--text); border: 1px solid #293246; padding: 10px 12px; border-radius: 10px; outline: none; }
+    textarea { min-height: 140px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btns { display:flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    button { border: 0; background: #1f2937; color: var(--text); padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+    button.primary { background: var(--accent); color: #001420; font-weight: 700; }
+    button.good { background: var(--ok); color: #00120c; font-weight: 700; }
+    button.warn { background: var(--warn); color:#1b1200; font-weight:700; }
+    button.danger { background: var(--err); color:#200307; font-weight:700; }
+    .pill { display:inline-flex; align-items:center; gap: 6px; padding: 6px 10px; border-radius:999px; background:#0b1220; border:1px solid #293246; color: var(--muted); }
+    .status { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .dot { width:10px; height:10px; border-radius:50%; background:#64748b; display:inline-block; }
+    .dot.ok { background: var(--ok);}
+    .dot.warn { background: var(--warn);}
+    .dot.err { background: var(--err);}
+    .hint { font-size: 12px; color: var(--muted); }
+    .mini { font-size: 11px; color: var(--muted); }
+    .code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; background:#0b1220; border:1px solid #293246; border-radius:10px; padding:8px; }
+    .grid-3 { display:grid; grid-template-columns: repeat(3,1fr); gap:12px; }
+    .grid-2 { display:grid; grid-template-columns: repeat(2,1fr); gap:12px; }
+    .foot { margin-top: 10px; font-size: 12px; color: var(--muted); }
+    .hr { height:1px; background:#232b3d; margin:12px 0; }
+    @media (max-width: 900px){ .app { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <h1>🧾 Zebra QLn (2-inch) Web Label Printer</h1>
+  <div class="app">
+    <section class="card">
+      <div class="status">
+        <span class="pill"><span id="bp-dot" class="dot"></span> Browser Print: <b id="bp-status">not loaded</b></span>
+        <span class="pill"><span id="dev-dot" class="dot"></span> Printer: <b id="dev-status">not connected</b></span>
+        <span class="pill">Language: 
+          <select id="lang">
+            <option value="ZPL">ZPL</option>
+            <option value="CPCL">CPCL</option>
+          </select>
+        </span>
+        <span class="pill">DPI: 
+          <select id="dpi">
+            <option value="203" selected>203</option>
+            <option value="300">300</option>
+          </select>
+        </span>
+        <span class="pill">Width (dots):
+          <select id="pw">
+            <option value="384" selected>384 (≈2")</option>
+            <option value="406">406 (2.0" exact)</option>
+            <option value="560">560 (≈2.75")</option>
+          </select>
+        </span>
+      </div>
+      <div class="hr"></div>
+      <div class="row">
+        <div>
+          <label>Top Line (e.g., Item / Name)</label>
+          <input id="line1" placeholder="Example: Item 12345"/>
+        </div>
+        <div>
+          <label>Second Line (e.g., Details)</label>
+          <input id="line2" placeholder="Example: Blue / Medium"/>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Barcode (CODE128)</label>
+          <input id="barcode" placeholder="1234567890"/>
+        </div>
+        <div>
+          <label>Quantity (labels to print)</label>
+          <input id="qty" type="number" value="1" min="1" max="999"/>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Extra Note (small text)</label>
+          <input id="note" placeholder="Optional note"/>
+        </div>
+        <div>
+          <label>Date</label>
+          <input id="date" />
+        </div>
+      </div>
+      <div class="btns">
+        <button id="btn-detect">Detect Printers</button>
+        <button id="btn-select">Select Printer…</button>
+        <button id="btn-test" class="warn">Test Print</button>
+        <button id="btn-print" class="primary">Print Label</button>
+        <button id="btn-preview">Preview Commands</button>
+        <button id="btn-clear" class="danger">Clear</button>
+      </div>
+      <div class="foot">Requires <b>Zebra Browser Print</b> (Link‑OS) running locally. If the status above won’t turn green, install Zebra Browser Print and refresh.</div>
+    </section>
+
+    <section class="card">
+      <label>Raw Commands (what will be sent to the printer)</label>
+      <textarea id="raw"></textarea>
+      <div class="btns">
+        <button id="btn-copy" class="good">Copy</button>
+        <button id="btn-save">Save .txt (manual send)</button>
+      </div>
+      <div class="mini">If you don’t use Browser Print, you can copy these commands and send them through Zebra Setup Utilities → Tools → <i>Send file</i>.</div>
+    </section>
+  </div>
+
+  <div class="card" style="margin:16px auto; max-width:980px;">
+    <details>
+      <summary><b>Troubleshooting & Notes</b></summary>
+      <ul>
+        <li>QLn printers can speak <b>ZPL</b> or <b>CPCL</b>. Set the language on the printer menu, or send the proper setup command. If your unit is set to CPCL and you send ZPL, nothing will print.</li>
+        <li>Use the correct print width in dots (for 2″ @ 203dpi, <b>406</b> is exact; many labels fit at <b>384</b> dots). A too‑wide width will clip the right edge.</li>
+        <li>USB/Bluetooth printing from the browser depends on Zebra <i>Browser Print</i>. Install it for Windows/macOS and keep the tray app running.</li>
+        <li>If you see “not loaded”, the page couldn’t load the Browser Print JS from <code>http://localhost:9101/</code>. Start the service and reload.</li>
+      </ul>
+    </details>
+  </div>
+
+  <script>
+    // ------- Utilities
+    const $ = (q)=>document.querySelector(q);
+    const rawEl = $("#raw");
+    const status = {
+      bp: $("#bp-status"),
+      bpDot: $("#bp-dot"),
+      dev: $("#dev-status"),
+      devDot: $("#dev-dot"),
+    };
+    let defaultDevice = null;
+    let devices = [];
+
+    function setBPStatus(ok, text){
+      status.bp.textContent = text || (ok?"loaded":"not loaded");
+      status.bpDot.className = "dot " + (ok?"ok":"err");
+    }
+    function setDevStatus(ok, text){
+      status.dev.textContent = text || (ok?(defaultDevice?.name || "connected"):"not connected");
+      status.devDot.className = "dot " + (ok?"ok":"err");
+    }
+
+    // ------- Try to load Zebra Browser Print helper from the local service
+    function loadBrowserPrintScript(){
+      return new Promise((resolve, reject)=>{
+        const s = document.createElement("script");
+        s.src = "http://localhost:9101/BrowserPrint-3.0.216.min.js";
+        s.onload = ()=>resolve();
+        s.onerror = ()=>{
+          // Try legacy path
+          const s2 = document.createElement("script");
+          s2.src = "http://localhost:9101/BrowserPrint-3.0.js";
+          s2.onload = ()=>resolve();
+          s2.onerror = ()=>reject(new Error("Browser Print JS not found"));
+          document.head.appendChild(s2);
+        };
+        document.head.appendChild(s);
+      });
+    }
+
+    async function initBP(){
+      try{
+        await loadBrowserPrintScript();
+        if(!window.BrowserPrint){
+          setBPStatus(false, "not loaded");
+          return;
+        }
+        setBPStatus(true, "loaded");
+        BrowserPrint.getDefaultDevice("printer", (dev)=>{
+          if(dev && dev.connection != "unknown"){
+            defaultDevice = dev;
+            setDevStatus(true, dev.name || "default printer");
+          }else{
+            setDevStatus(false, "select a printer");
+          }
+        }, ()=>setDevStatus(false, "no default printer"));
+      }catch(e){
+        setBPStatus(false, "not loaded");
+        setDevStatus(false, "no connection");
+      }
+    }
+
+    // ------- UI logic
+    $("#btn-detect").addEventListener("click", ()=>{
+      if(!window.BrowserPrint){ alert("Browser Print not loaded."); return; }
+      BrowserPrint.getLocalDevices((devs)=>{
+        devices = devs.filter(d=>d.deviceType === "printer");
+        if(devices.length===0){ alert("No Zebra printers found."); return; }
+        alert("Found printers:\\n" + devices.map(d=>`• ${d.name} (${d.connection})`).join("\\n"));
+      }, (err)=>alert("Error: "+err));
+    });
+
+    $("#btn-select").addEventListener("click", ()=>{
+      if(!window.BrowserPrint){ alert("Browser Print not loaded."); return; }
+      BrowserPrint.selectDevice("printer", (dev)=>{
+        defaultDevice = dev;
+        setDevStatus(true, dev.name || "selected");
+      }, ()=>{});
+    });
+
+    $("#btn-test").addEventListener("click", ()=>{
+      const lang = $("#lang").value;
+      const pw = +$("#pw").value;
+      const dpi = +$("#dpi").value;
+      const zpl = `^XA
+^PW${pw}
+^PR4
+^MD0
+^LH0,0
+^FO20,20^A0N,30,30^FDZebra Test^FS
+^FO20,70^A0N,24,24^FD${dpi} dpi / PW ${pw}^FS
+^FO20,120^BCN,80,Y,N,N^FD1234567890^FS
+^FO20,220^GB${pw-40},2,2^FS
+^FO20,240^A0N,22,22^FDPrinted via Browser Print^FS
+^XZ`;
+
+      const cpcl = `! 0 200 200 300 1
+PW ${pw}
+SETBOLD 0
+SETLP 5 0 24
+TONE 0
+TEXT 4 0 20 20 Zebra Test
+TEXT 4 0 20 60 ${dpi} dpi / PW ${pw}
+BARCODE 128 1 1 80 20 100 1234567890
+LINE 20 200 ${pw-20} 200 2
+TEXT 4 0 20 220 Printed via Browser Print
+FORM
+PRINT`;
+      rawEl.value = (lang==="ZPL")? zpl : cpcl;
+      sendToPrinter();
+    });
+
+    $("#btn-preview").addEventListener("click", ()=>{
+      rawEl.value = buildCommands();
+    });
+
+    $("#btn-clear").addEventListener("click", ()=>{
+      rawEl.value = "";
+      $("#line1").value = "";
+      $("#line2").value = "";
+      $("#barcode").value = "";
+      $("#qty").value = "1";
+      $("#note").value = "";
+      $("#date").value = "";
+    });
+
+    $("#btn-copy").addEventListener("click", async ()=>{
+      try{
+        await navigator.clipboard.writeText(rawEl.value || buildCommands());
+        alert("Copied raw commands to clipboard.");
+      }catch(e){
+        alert("Copy failed: " + e.message);
+      }
+    });
+
+    $("#btn-save").addEventListener("click", ()=>{
+      const blob = new Blob([rawEl.value || buildCommands()], {type: "text/plain"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "zebra_label.txt";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    $("#btn-print").addEventListener("click", ()=>{
+      rawEl.value = buildCommands();
+      sendToPrinter();
+    });
+
+    function sendToPrinter(){
+      if(!window.BrowserPrint){ alert("Browser Print not loaded."); return; }
+      if(!defaultDevice){ alert("Select a printer first."); return; }
+      const qty = Math.max(1, Math.min(999, parseInt($("#qty").value || "1",10)));
+      const data = rawEl.value || buildCommands();
+      // Some languages support ^PQ for quantity; we send multiple jobs for compatibility
+      const payload = Array(qty).fill(data).join("\n");
+      defaultDevice.send(payload, ()=>{
+        alert("Sent to printer.");
+      }, (err)=>{
+        alert("Print error: " + err);
+        setDevStatus(false, "error");
+      });
+    }
+
+    function buildCommands(){
+      const lang = $("#lang").value;
+      const pw = +$("#pw").value;
+      const dpi = +$("#dpi").value;
+      const l1 = ($("#line1").value || "").toString().slice(0, 40);
+      const l2 = ($("#line2").value || "").toString().slice(0, 40);
+      const bc = ($("#barcode").value || "1234567890").toString();
+      const note = ($("#note").value || "").toString().slice(0, 40);
+      const date = ($("#date").value || new Date().toLocaleDateString()).toString().slice(0, 40);
+
+      if(lang === "ZPL"){
+        // Basic 2-inch layout (portrait). Adjust Y positions as needed.
+        const zpl = [
+          "^XA",
+          `^PW${pw}`,
+          "^PR4",
+          "^MD0",
+          "^LH0,0",
+          `^FO15,10^A0N,30,30^FD${escapeZ(l1)}^FS`,
+          `^FO15,50^A0N,26,26^FD${escapeZ(l2)}^FS`,
+          `^FO15,90^BCN,80,Y,N,N^FD${escapeZ(bc)}^FS`,
+          `^FO15,180^A0N,22,22^FD${escapeZ(note)}^FS`,
+          `^FO15,206^A0N,22,22^FD${escapeZ(date)}^FS`,
+          `^FO15,235^GB${pw-30},2,2^FS`,
+          "^XZ"
+        ].join("\n");
+        return zpl;
+      }else{
+        // CPCL for 203dpi; PW sets the print width in dots
+        const cpcl = [
+          "! 0 200 200 320 1",
+          `PW ${pw}`,
+          "SETBOLD 0",
+          "SETLP 5 0 24",
+          "TONE 0",
+          `TEXT 4 0 15 10 ${escapeC(l1)}`,
+          `TEXT 4 0 15 50 ${escapeC(l2)}`,
+          `BARCODE 128 1 1 80 15 90 ${escapeC(bc)}`,
+          `TEXT 4 0 15 180 ${escapeC(note)}`,
+          `TEXT 4 0 15 206 ${escapeC(date)}`,
+          `LINE 15 235 ${pw-15} 235 2`,
+          "FORM",
+          "PRINT"
+        ].join("\n");
+        return cpcl;
+      }
+    }
+
+    function escapeZ(s){
+      return s.replace(/\^/g, " ").replace(/~/g,"-").replace(/[\x00-\x1F]/g," ");
+    }
+    function escapeC(s){
+      return s.replace(/!/g," ").replace(/[\x00-\x1F]/g," ");
+    }
+
+    // Default date
+    $("#date").value = new Date().toLocaleDateString();
+
+    // Boot
+    initBP();
+  </script>
+</body>
+</html>
