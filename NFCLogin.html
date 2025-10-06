@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NFC Login (Web NFC, Client-Side)</title>
+  <title>NFC Login (Redirect)</title>
   <style>
     body { font-family: Arial, sans-serif; background: #0f172a; color: #e5e7eb; text-align: center; padding: 40px; }
     h1 { color: #38bdf8; }
@@ -13,7 +13,7 @@
 </head>
 <body>
   <h1>NFC Login System</h1>
-  <p>This is a single-page HTML app that uses Web NFC to log in using an NFC card. Works on Chrome for Android.</p>
+  <p>Tap your NFC card to access the Inventory page.</p>
   <button class="btn" onclick="startLogin()">Start NFC Login</button>
   <pre id="output"></pre>
 <script>
@@ -31,7 +31,10 @@ async function startLogin() {
       const decoder = new TextDecoder();
       for (const record of event.message.records) {
         if (record.recordType === 'text') {
-          output.textContent = 'NFC Card Token: ' + decoder.decode(record.data);
+          const token = decoder.decode(record.data);
+          output.textContent = 'NFC Card Token: ' + token + '\nRedirecting to Inventory...';
+          window.location.href = 'Inventory.html';
+          return;
         }
       }
     };
