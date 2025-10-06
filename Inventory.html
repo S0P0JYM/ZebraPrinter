@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>TC Inventory — Barcode + NFC</title>
+<style>
+  :root{--bg:#0f1724;--panel:#081522;--ink:#e6eef8;--muted:#9fb0c9;--line:#233142;--accent:#1070f4;--ok:#18b67e;--warn:#ffb020;--err:#ff5a67}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+  header{padding:12px 16px;background:#0b1220;border-bottom:1px solid #0e2238;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  h1{margin:0;font-size:18px}
+  main{padding:12px;display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  input,select,button,textarea{font-size:16px}
+  input,select,textarea{padding:10px;border-radius:10px;border:1px solid var(--line);background:#0b1a2a;color:var(--ink)}
+  textarea{width:100%;min-height:90px}
+  button{padding:10px 12px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:600}
+  button.ghost{background:transparent;border:1px solid var(--line);color:#dbeafe}
+  .pill{padding:4px 8px;border-radius:999px;background:#0b1a2a;border:1px solid var(--line);color:var(--muted);font-size:12px}
+  .badge{display:inline-block;padding:2px 6px;border-radius:6px;border:1px solid var(--line);background:#0b1a2a;color:#c7d6ef;font-size:12px}
+  .history{max-height:48vh;overflow:auto}
+  .item{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px;border-bottom:1px dashed rgba(255,255,255,.06)}
+  .item small{color:var(--muted)}
+  .split{display:grid;grid-template-columns:repeat(12,1fr);gap:8px}
+  .c-4{grid-column:span 4;min-width:180px} .c-6{grid-column:span 6;min-width:220px} .c-12{grid-column:span 12}
+  .hidden{display:none}
+  .center{display:flex;justify-content:center;align-items:center}
+  .status-ok{background:#0f2a1f;border-color:#1f513f} .status-warn{background:#2a1f10;border-color:#5a3b1b} .status-err{background:#33161c;border-color:#6b1b20}
+  .hidden-input{position:absolute;left:-9999px;opacity:0;height:0;width:0}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<section id="loginCard" class="card" style="max-width:520px;margin:24px auto">
+  <div class="row" style="justify-content:space-between;align-items:center">
+    <h2 style="margin:0">Sign in</h2><span class="pill">TC Inventory</span>
+  </div>
+  <div class="row" style="margin-top:8px;flex-direction:column;align-items:stretch">
+    <label>User / Operator</label>
+    <input id="loginUser" placeholder="e.g. j.smith" autocomplete="username">
+    <label>PIN (optional)</label>
+    <input id="loginPin" placeholder="****" type="password" inputmode="numeric" autocomplete="current-password">
+    <label>Facility / Site (optional)</label>
+    <input id="loginSite" placeholder="DC-01">
+    <button id="btnLogin" style="margin-top:8px">Login</button>
+  </div>
+  <p style="color:#9fb0c9;font-size:13px;margin-top:8px">
+    Tip: After login, DataWedge keystrokes will land in the app automatically (set Enter suffix).
+  </p>
+</section>
+
+<header id="appHeader" class="hidden">
+  <h1>TC Inventory</h1>
+  <span class="pill">User: <b id="who"></b></span>
+  <span class="pill">Site: <b id="site"></b></span>
+  <span id="status" class="pill">Status: Ready</span>
+  <button id="btnLogout" class="ghost">Logout</button>
+</header>
+
+<main id="appMain" class="hidden">
+  <!-- Scan controls -->
+  <section class="card">
+    <div class="split">
+      <div class="c-4">
+        <label>Mode</label><br>
+        <select id="mode">
+          <option value="receive">Receive</option>
+          <option value="pick">Pick</option>
+          <option value="cycle">Cycle Count</option>
+          <option value="move">Move</option>
+        </select>
+      </div>
+      <div class="c-4">
+        <label>Session / Order (optional)</label><br>
+        <input id="session" placeholder="PO12345 / PICK-789">
+      </div>
+      <div class="c-4">
+        <label>Quantity</label><br>
+        <input id="qty" type="number" min="1" step="1" value="1">
+      </div>
+
+      <div class="c-4">
+        <label>Scan target</label><br>
+        <select id="scanTarget">
+          <option value="auto">Auto detect</option>
+          <option value="sku">SKU / Item</option>
+          <option value="bin">BIN / Location</option>
+        </select>
+      </div>
+      <div class="c-4">
+        <label>SKU / Item</label><br>
+        <input id="sku" placeholder="Scan or type SKU">
+      </div>
+      <div class="c-4">
+        <label>BIN / Location</label><br>
+        <input id="bin" placeholder="Scan or type BIN">
+      </div>
+
+      <div class="c-12">
+        <div class="row">
+          <button id="btnCommit" class="status-ok">Commit line</button>
+          <button id="btnUndo" class="ghost">Undo last</button>
+          <button id="btnClear" class="ghost">Clear all</button>
+          <span class="pill">Filter:</span>
+          <input id="filter" placeholder="Search (SKU/BIN/session/user/note)" style="flex:1;min-width:220px">
+        </div>
+      </div>
+    </div>
+    <p style="color:#9fb0c9;font-size:13px;margin-top:6px">
+      Barcode: DataWedge Keystroke Output with <b>Enter</b> suffix. &nbsp; NFC: Chrome over <b>HTTPS</b>.
+    </p>
+  </section>
+
+  <!-- NFC -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <strong>NFC</strong>
+      <span id="nfcBadge" class="pill">Web NFC: <em>checking…</em></span>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <button id="btnNfcStart">Start NFC scan</button>
+      <button id="btnNfcStop" class="ghost">Stop</button>
+      <label class="pill"><input id="nfcApply" type="checkbox" style="vertical-align:middle"> Apply tag fields to SKU/BIN</label>
+    </div>
+    <details style="margin-top:8px">
+      <summary style="cursor:pointer">How tags are parsed</summary>
+      <div style="color:#9fb0c9;font-size:13px;margin-top:6px">
+        If an NDEF Text/URL record contains <code>SKU:12345</code> or <code>BIN:A1-03-02</code>, the app will auto-fill SKU/BIN when “Apply” is on.
+      </div>
+    </details>
+  </section>
+
+  <!-- History -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <strong>History</strong>
+      <div class="row">
+        <button id="btnExport" class="ghost">Export CSV</button>
+        <button id="btnShare" class="ghost">Share CSV</button>
+        <span class="pill">Rows: <b id="count">0</b></span>
+      </div>
+    </div>
+    <div id="history" class="history" aria-live="polite" style="margin-top:6px"></div>
+  </section>
+</main>
+
+<!-- hidden input keeps focus for keystroke scanners -->
+<input id="scanSink" class="hidden-input" autocomplete="off">
+
+<script>
+(function(){
+  // ===== Persistent keys =====
+  const K_USER = 'tc_inv_user_v1';
+  const K_SITE = 'tc_inv_site_v1';
+  const K_ROWS = 'tc_inv_rows_v1';
+
+  // ===== Elements =====
+  const loginCard = document.getElementById('loginCard');
+  const appHeader = document.getElementById('appHeader');
+  const appMain   = document.getElementById('appMain');
+
+  const whoEl   = document.getElementById('who');
+  const siteEl  = document.getElementById('site');
+  const statusEl= document.getElementById('status');
+
+  const modeEl  = document.getElementById('mode');
+  const sessionEl = document.getElementById('session');
+  const qtyEl   = document.getElementById('qty');
+  const scanTargetEl = document.getElementById('scanTarget');
+  const skuEl   = document.getElementById('sku');
+  const binEl   = document.getElementById('bin');
+
+  const histEl  = document.getElementById('history');
+  const countEl = document.getElementById('count');
+  const filterEl= document.getElementById('filter');
+
+  const nfcBadge= document.getElementById('nfcBadge');
+  const nfcApply= document.getElementById('nfcApply');
+
+  const sink    = document.getElementById('scanSink');
+
+  // Login
+  const loginUserEl = document.getElementById('loginUser');
+  const loginPinEl  = document.getElementById('loginPin');
+  const loginSiteEl = document.getElementById('loginSite');
+
+  // Buttons
+  document.getElementById('btnLogin').addEventListener('click', login);
+  document.getElementById('btnLogout').addEventListener('click', logout);
+  document.getElementById('btnCommit').addEventListener('click', commitLine);
+  document.getElementById('btnUndo').addEventListener('click', undoLast);
+  document.getElementById('btnClear').addEventListener('click', clearAll);
+  document.getElementById('btnExport').addEventListener('click', exportCSV);
+  document.getElementById('btnShare').addEventListener('click', shareCSV);
+
+  document.getElementById('btnNfcStart').addEventListener('click', startNfc);
+  document.getElementById('btnNfcStop').addEventListener('click', stopNfc);
+  filterEl.addEventListener('input', render);
+
+  // ===== App state =====
+  let user = localStorage.getItem(K_USER) || '';
+  let site = localStorage.getItem(K_SITE) || '';
+  let rows = JSON.parse(localStorage.getItem(K_ROWS) || '[]'); // newest first
+
+  // ===== Init =====
+  const WEB_NFC = ('NDEFReader' in window);
+  nfcBadge.innerHTML = 'Web NFC: ' + (WEB_NFC ? '<b>available</b>' : '<em>not available</em> (Chrome + HTTPS only)');
+  if (user) showApp(); else showLogin();
+  render();
+  keepScannerFocus();
+
+  // ===== Login / Logout =====
+  function login(){
+    const u = (loginUserEl.value||'').trim();
+    const s = (loginSiteEl.value||'').trim();
+    if(!u){ alert('Enter user'); return; }
+    user = u; site = s;
+    localStorage.setItem(K_USER, user);
+    localStorage.setItem(K_SITE, site);
+    showApp();
+  }
+  function logout(){
+    stopNfc();
+    showLogin();
+  }
+  function showLogin(){
+    appHeader.classList.add('hidden');
+    appMain.classList.add('hidden');
+    loginCard.classList.remove('hidden');
+    statusSet('Please sign in', false);
+  }
+  function showApp(){
+    whoEl.textContent = user || '(none)';
+    siteEl.textContent = site || '(none)';
+    loginCard.classList.add('hidden');
+    appHeader.classList.remove('hidden');
+    appMain.classList.remove('hidden');
+    statusSet('Ready', false);
+  }
+
+  // ===== Keystroke scan capture (DataWedge) =====
+  // Strategy: collect fast keypresses until Enter; also use a hidden input to satisfy focus-hungry scanners.
+  let buffer = '', tLast = 0;
+  window.addEventListener('keydown',(e)=>{
+    if(e.key === 'Enter'){ e.preventDefault(); onScan(buffer || sink.value); buffer = ''; sink.value=''; }
+    else if(e.key.length === 1){ const now=Date.now(); if(now - tLast > 200) buffer=''; tLast=now; buffer += e.key; }
+  });
+  sink.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); onScan(sink.value); sink.value=''; }});
+  function keepScannerFocus(){ if (document.activeElement !== sink) sink.focus(); setTimeout(keepScannerFocus, 1500); }
+
+  function onScan(codeRaw){
+    const code = (codeRaw||'').trim();
+    if(!code) return;
+    // Auto-detect BIN prefixes if selected
+    let target = scanTargetEl.value;
+    if (target === 'auto'){
+      if (/^BIN[-:]/i.test(code) || /^A\d|^B\d|^C\d/.test(code)) target = 'bin';
+      else target = 'sku';
+    }
+    if (target === 'sku') skuEl.value = code;
+    if (target === 'bin') binEl.value = code.replace(/^BIN[-:]\s*/i,'');
+    feedback(true);
+    statusSet(`Barcode → ${target.toUpperCase()}: ${code}`, false);
+  }
+
+  // ===== NFC =====
+  let nfcReader = null;
+  async function startNfc(){
+    if(!WEB_NFC){ alert('Web NFC not available. Use Chrome on Android over HTTPS.'); return; }
+    try{
+      nfcReader = new NDEFReader();
+      await nfcReader.scan();
+      nfcReader.onreadingerror = ()=> statusSet('NFC read error', true);
+      nfcReader.onreading = (ev)=>{
+        try{
+          const tagId = ev.serialNumber || '(no-id)';
+          const textChunks = [];
+          if (ev.message?.records?.length){
+            for (const r of ev.message.records){
+              const t = decodeRecordText(r);
+              if (t) textChunks.push(t);
+              if (nfcApply.checked) applyFromNdefText(t);
+            }
+          }
+          feedback(true);
+          statusSet(`NFC tag ${tagId}`, false);
+          // Store an informational row (not a committed line)
+          pushRow({kind:'nfc', user, site, t:Date.now(), note:`NFC ${tagId}`, ndef:textChunks.join(' | ')});
+          render();
+        }catch(e){ statusSet('NFC parse error', true); feedback(false); }
+      };
+      statusSet('NFC scanning… tap tag', false);
+    }catch(e){
+      alert('Cannot start NFC: ' + (e?.message||e));
+      statusSet('NFC start failed', true);
+    }
+  }
+  function stopNfc(){ try{ nfcReader && nfcReader.abort && nfcReader.abort(); }catch(_){ } statusSet('NFC stopped', false); }
+
+  function decodeRecordText(r){
+    try{
+      // Chrome exposes .data (ArrayBuffer). Fallback to .payload
+      let u8 = null;
+      if (r.data instanceof ArrayBuffer) u8 = new Uint8Array(r.data);
+      else if (r.payload instanceof ArrayBuffer) u8 = new Uint8Array(r.payload);
+      if (!u8) return '';
+      if (r.recordType === 'text'){
+        const langLen = u8[0] & 0x3f;
+        return new TextDecoder().decode(u8.slice(1+langLen));
+      }
+      return new TextDecoder().decode(u8);
+    }catch(_){ return ''; }
+  }
+  function applyFromNdefText(s){
+    if(!s) return;
+    const mSku = s.match(/(?:^|\b)SKU[:=]\s*([^\s;]+)/i);
+    const mBin = s.match(/(?:^|\b)BIN[:=]\s*([^\s;]+)/i);
+    if (mSku) skuEl.value = mSku[1];
+    if (mBin) binEl.value = mBin[1];
+  }
+
+  // ===== Commit / History =====
+  function commitLine(){
+    const line = {
+      kind: 'line',
+      t: Date.now(),
+      user, site,
+      mode: modeEl.value,
+      session: (sessionEl.value||'').trim(),
+      sku: (skuEl.value||'').trim(),
+      bin: (binEl.value||'').trim(),
+      qty: Math.max(1, parseInt(qtyEl.value||'1', 10))
+    };
+    if(!line.sku){ alert('SKU is required'); return; }
+    pushRow(line);
+    // reset for speed
+    qtyEl.value = '1'; skuEl.value=''; // keep BIN, session
+    feedback(true);
+    statusSet(`Committed ${line.qty} × ${line.sku}`, false);
+    render();
+  }
+
+  function pushRow(obj){
+    rows.unshift(obj);
+    if (rows.length > 5000) rows = rows.slice(0, 5000);
+    localStorage.setItem(K_ROWS, JSON.stringify(rows));
+  }
+  function undoLast(){ if(!rows.length) return; rows.shift(); saveRows(); render(); }
+  function clearAll(){ if(!confirm('Clear ALL rows?')) return; rows=[]; saveRows(); render(); }
+  function saveRows(){ localStorage.setItem(K_ROWS, JSON.stringify(rows)); }
+
+  function render(){
+    histEl.innerHTML = '';
+    const q = (filterEl.value||'').trim().toLowerCase();
+    const show = rows.filter(r=>{
+      const base = JSON.stringify(r).toLowerCase();
+      return !q || base.includes(q);
+    });
+    show.forEach((r, idx)=>{
+      const div = document.createElement('div');
+      div.className = 'item';
+      if (r.kind === 'line'){
+        div.innerHTML = `
+          <div>
+            <div><strong>${esc(r.sku)}</strong> • <span class="badge">${r.mode.toUpperCase()}</span>
+              ${r.bin?` <span class="badge">BIN ${esc(r.bin)}</span>`:''}
+              ${r.session?` <span class="badge">SESSION ${esc(r.session)}</span>`:''}
+              <span class="badge">QTY ${r.qty}</span>
+            </div>
+            <small>${new Date(r.t).toLocaleString()} — ${esc(r.user||'')} @ ${esc(r.site||'')}</small>
+          </div>
+          <div><button class="ghost" data-i="${idx}">del</button></div>`;
+      } else {
+        div.innerHTML = `
+          <div>
+            <div><strong>NFC</strong> <span class="badge">info</span></div>
+            <small>${new Date(r.t).toLocaleString()} — ${esc(r.user||'')} @ ${esc(r.site||'')}</small>
+            <div style="margin-top:6px"><code>${esc(r.ndef||r.note||'')}</code></div>
+          </div>
+          <div><button class="ghost" data-i="${idx}">del</button></div>`;
+      }
+      div.querySelector('button').addEventListener('click', (e)=>{
+        const i = Number(e.currentTarget.dataset.i);
+        const real = rows.indexOf(show[i]);
+        if(real>-1){ rows.splice(real,1); saveRows(); render(); }
+      });
+      histEl.appendChild(div);
+    });
+    countEl.textContent = rows.length;
+  }
+
+  // ===== Export / Share =====
+  function exportCSV(){
+    if(!rows.length) return alert('Nothing to export.');
+    const header = ['timestamp','user','site','type','mode','session','sku','bin','qty','note'];
+    const cells = [header.join(',')];
+    rows.forEach(r=>{
+      const row = [
+        new Date(r.t).toISOString(),
+        r.user||'',
+        r.site||'',
+        r.kind||'line',
+        r.mode||'',
+        r.session||'',
+        r.sku||'',
+        r.bin||'',
+        r.qty||'',
+        r.ndef||r.note||''
+      ].map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',');
+      cells.push(row);
+    });
+    const csv = cells.join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'inventory_'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1200);
+  }
+  async function shareCSV(){
+    if(!rows.length) return alert('Nothing to share.');
+    const csvBlob = new Blob([buildCSV()], {type:'text/csv'});
+    const file = new File([csvBlob], 'inventory.csv', {type:'text/csv'});
+    if(!(navigator.canShare && navigator.canShare({files:[file]}))){
+      alert('Share not available here. Use Export instead.');
+      return;
+    }
+    try{
+      await navigator.share({title:'Inventory CSV', files:[file]});
+    }catch(e){
+      if(e?.name!=='AbortError') alert('Share failed: ' + (e?.message||e));
+    }
+  }
+  function buildCSV(){
+    const header = ['timestamp','user','site','type','mode','session','sku','bin','qty','note'];
+    const cells = [header.join(',')];
+    rows.forEach(r=>{
+      const row = [
+        new Date(r.t).toISOString(),
+        r.user||'',
+        r.site||'',
+        r.kind||'line',
+        r.mode||'',
+        r.session||'',
+        r.sku||'',
+        r.bin||'',
+        r.qty||'',
+        r.ndef||r.note||''
+      ].map(c => '"' + String(c).replace(/"/g,'""') + '"').join(',');
+      cells.push(row);
+    });
+    return cells.join('\n');
+  }
+
+  // ===== UX helpers =====
+  function statusSet(msg, bad){
+    statusEl.textContent = 'Status: ' + msg;
+    statusEl.className = 'pill ' + (bad?'status-err':'');
+  }
+  function feedback(ok){
+    try{ navigator.vibrate && navigator.vibrate(ok?35:100); }catch(_){}
+    const AC = window.AudioContext||window.webkitAudioContext;
+    if(!AC) return;
+    const ctx = new AC(), o=ctx.createOscillator(), g=ctx.createGain();
+    o.type = ok?'sine':'square'; o.frequency.value = ok?880:220; g.gain.value=.06; o.connect(g).connect(ctx.destination);
+    o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, ok?120:220);
+  }
+  function esc(s){ return (''+s).replace(/[&<>\"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+})();
+</script>
+</body>
+</html>
