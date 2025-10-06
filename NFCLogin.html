@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NFC Login (Web NFC, Client-Side)</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #e5e7eb; text-align: center; padding: 40px; }
+    h1 { color: #38bdf8; }
+    .btn { padding: 10px 20px; border: none; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
+    .btn:hover { background: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <h1>NFC Login System</h1>
+  <p>This is a single-page HTML app that uses Web NFC to log in using an NFC card. Works on Chrome for Android.</p>
+  <button class="btn" onclick="startLogin()">Start NFC Login</button>
+  <pre id="output"></pre>
+<script>
+async function startLogin() {
+  const output = document.getElementById('output');
+  if (!('NDEFReader' in window)) {
+    output.textContent = 'Web NFC not supported. Use Chrome on Android.';
+    return;
+  }
+  try {
+    const ndef = new NDEFReader();
+    await ndef.scan();
+    output.textContent = 'Tap your NFC card...';
+    ndef.onreading = event => {
+      const decoder = new TextDecoder();
+      for (const record of event.message.records) {
+        if (record.recordType === 'text') {
+          output.textContent = 'NFC Card Token: ' + decoder.decode(record.data);
+        }
+      }
+    };
+  } catch (error) {
+    output.textContent = 'Error: ' + error.message;
+  }
+}
+</script>
+</body>
+</html>
