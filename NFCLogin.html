@@ -3,43 +3,82 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NFC Login (Redirect)</title>
+  <title>NFC Login (Authorized Redirect)</title>
   <style>
     body { font-family: Arial, sans-serif; background: #0f172a; color: #e5e7eb; text-align: center; padding: 40px; }
     h1 { color: #38bdf8; }
     .btn { padding: 10px 20px; border: none; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; }
     .btn:hover { background: #1d4ed8; }
+    .muted { color: #94a3b8; font-size: 14px; }
+    pre { text-align: left; margin: 16px auto; max-width: 640px; background: #0b1220; padding: 12px; border-radius: 8px; }
+    code { color: #93c5fd; }
   </style>
 </head>
 <body>
-  <h1>NFC Login System</h1>
-  <p>Tap your NFC card to access the Inventory page.</p>
+  <h1>NFC Login</h1>
+  <p class="muted">Tap your NFC badge to authenticate. Only authorized tokens will redirect.</p>
   <button class="btn" onclick="startLogin()">Start NFC Login</button>
   <pre id="output"></pre>
+
 <script>
+// =================== CONFIG ===================
+// Edit the list below with your allowed NFC text tokens.
+// Example: write one of these strings onto an NFC tag as a Text (NDEF) record.
+const AUTH = {
+  allowedTokens: [
+    urn:aask:04A762C2FC1F90F92FA7D7FDEFABE13A169A3091090E287A32B98A36E0ABFB",      // example token
+    // "EMPLOYEE:1001",  // add more as needed
+  ],
+  redirectUrl: "Inventory.html",
+  caseSensitive: true   // set to false to compare tokens case-insensitively
+};
+// ==============================================
+
+function normalizeToken(s) {
+  if (!s) return "";
+  return AUTH.caseSensitive ? String(s).trim() : String(s).trim().toLowerCase();
+}
+
+function isAuthorized(token) {
+  const norm = normalizeToken(token);
+  if (!norm) return false;
+  const list = AUTH.caseSensitive ? AUTH.allowedTokens : AUTH.allowedTokens.map(t => String(t).toLowerCase());
+  return list.includes(norm);
+}
+
 async function startLogin() {
   const output = document.getElementById('output');
   if (!('NDEFReader' in window)) {
-    output.textContent = 'Web NFC not supported. Use Chrome on Android.';
+    output.textContent = 'Web NFC not supported. Use Chrome on Android over HTTPS.';
     return;
   }
   try {
     const ndef = new NDEFReader();
     await ndef.scan();
-    output.textContent = 'Tap your NFC card...';
+    output.textContent = 'Tap your NFC badge...';
     ndef.onreading = event => {
       const decoder = new TextDecoder();
+      let token = "";
       for (const record of event.message.records) {
         if (record.recordType === 'text') {
-          const token = decoder.decode(record.data);
-          output.textContent = 'NFC Card Token: ' + token + '\nRedirecting to Inventory...';
-          window.location.href = 'Inventory.html';
-          return;
+          token = decoder.decode(record.data);
+          break;
         }
+      }
+      if (!token) {
+        output.textContent = 'No text record found on this NFC tag. Please program a text token on the badge.';
+        return;
+      }
+      const displayToken = token.replace(/\n/g, ' ').trim();
+      if (isAuthorized(token)) {
+        output.textContent = 'Authorized token: ' + displayToken + '\nRedirecting...';
+        window.location.href = AUTH.redirectUrl;
+      } else {
+        output.textContent = 'Unauthorized token: ' + displayToken + '\nAccess denied. Please contact admin to add this token.';
       }
     };
   } catch (error) {
-    output.textContent = 'Error: ' + error.message;
+    document.getElementById('output').textContent = 'Error: ' + (error.message || error);
   }
 }
 </script>
