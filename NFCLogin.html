@@ -71,8 +71,8 @@ async function startLogin() {
       }
       const displayToken = token.replace(/\n/g, ' ').trim();
       if (isAuthorized(token)) {
-        output.textContent = 'Authorized token: ' + displayToken + '\nRedirecting...';
-        window.location.href = AUTH.redirectUrl;
+        output.textContent = 'Authorized token: ' + displayToken + '\nRedirecting to Inventory...';
+        window.location.href = Inventory.html;
       } else {
         output.textContent = 'Unauthorized token: ' + displayToken + '\nAccess denied. Please contact admin to add this token.';
       }
